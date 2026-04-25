@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Gestionnaire Mobile</title>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+
+  <link rel="icon" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+
+  <meta name="theme-color" content="#080b16" />
+</head>
+
+<body>
+  <div class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <img src="logo.png" alt="Logo" class="app-logo">
+        <div>
+          <h1>Gestionnaire</h1>
+          <p id="storageInfo">Stockage local</p>
+        </div>
+      </div>
+
+      <button class="icon-btn" id="btnSearch" title="Recherche">🔍</button>
+    </header>
+
+    <section class="search-panel hidden" id="searchPanel">
+      <input type="text" id="searchInput" placeholder="Rechercher un dossier ou fichier..." />
+      <button id="btnClearSearch">Effacer</button>
+    </section>
+
+    <section class="pathbar">
+      <button class="small-btn" id="btnHome">🏠</button>
+      <button class="small-btn" id="btnBack">←</button>
+      <div class="breadcrumb" id="breadcrumb">Accueil</div>
+    </section>
+
+    <section class="actions">
+      <button class="main-btn" id="btnNewFolder">📁 Nouveau dossier</button>
+      <button class="main-btn secondary" id="btnImport">⬆️ Importer</button>
+      <input type="file" id="fileInput" multiple hidden />
+    </section>
+
+    <section class="quick-folders" id="quickFolders"></section>
+
+    <main class="content">
+      <div class="section-title">
+        <h2 id="currentTitle">Accueil</h2>
+        <span id="itemsCount">0 élément</span>
+      </div>
+
+      <div class="grid" id="itemsGrid"></div>
+
+      <div class="empty hidden" id="emptyState">
+        <div class="empty-icon">📂</div>
+        <h3>Dossier vide</h3>
+        <p>Crée un sous-dossier ou importe un fichier.</p>
+      </div>
+    </main>
+
+    <nav class="bottom-nav">
+      <button id="navHome">🏠<span>Accueil</span></button>
+      <button id="navImages">🖼️<span>Images</span></button>
+      <button id="navVideos">🎬<span>Vidéos</span></button>
+      <button id="navAudio">🎵<span>Audio</span></button>
+      <button id="navDocs">📄<span>Docs</span></button>
+    </nav>
+
+  </div>
+
+  <div class="modal hidden" id="optionsModal">
+    <div class="modal-card">
+      <h3 id="modalTitle">Options</h3>
+      <button id="btnOpenItem">Ouvrir</button>
+      <button id="btnRenameItem">Renommer</button>
+      <button id="btnDownloadItem">Télécharger</button>
+      <button class="danger" id="btnDeleteItem">Supprimer</button>
+      <button class="cancel" id="btnCloseModal">Annuler</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
