@@ -18,6 +18,12 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
+        <provider
+            android:name=".GestionFilesProvider"
+            android:authorities="com.chasmet.gestiondefichiers.provider"
+            android:exported="true"
+            android:grantUriPermissions="true" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
