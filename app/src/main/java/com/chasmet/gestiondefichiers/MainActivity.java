@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
@@ -40,7 +41,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -65,6 +66,7 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
 
+        webView.addJavascriptInterface(new NativeStoreBridge(), "GestionNativeStore");
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -135,6 +137,13 @@ public class MainActivity extends Activity {
         });
 
         webView.loadUrl("file:///android_asset/www/index.html");
+    }
+
+    public class NativeStoreBridge {
+        @JavascriptInterface
+        public String saveFileBase64(String name, String mimeType, String base64) {
+            return GestionNativeStore.saveBase64(MainActivity.this, name, base64);
+        }
     }
 
     private String[] cleanAcceptTypes(String[] acceptTypes) {
