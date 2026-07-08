@@ -23,6 +23,20 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 2001;
+    private static final String[] DEFAULT_ACCEPT_TYPES = new String[] {
+        "image/*",
+        "video/*",
+        "audio/*",
+        "application/pdf",
+        "text/*",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/zip",
+        "application/x-zip-compressed"
+    };
+
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
 
@@ -70,20 +84,22 @@ public class MainActivity extends Activity {
 
                 MainActivity.this.filePathCallback = filePathCallback;
 
-                Intent intent = fileChooserParams.createIntent();
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                intent.putExtra(Intent.EXTRA_MIME_TYPES, cleanAcceptTypes(fileChooserParams.getAcceptTypes()));
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, fileChooserParams.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
-                String[] acceptTypes = fileChooserParams.getAcceptTypes();
-                if (acceptTypes != null && acceptTypes.length > 0) {
-                    intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptTypes);
-                }
+                Intent chooser = Intent.createChooser(intent, "Choisir une image, une vidéo, un audio ou un document");
 
                 try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception error) {
                     MainActivity.this.filePathCallback = null;
+                    Toast.makeText(MainActivity.this, "Sélecteur de fichiers indisponible", Toast.LENGTH_SHORT).show();
                     return false;
                 }
             }
@@ -121,6 +137,34 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/www/index.html");
     }
 
+    private String[] cleanAcceptTypes(String[] acceptTypes) {
+        if (acceptTypes == null || acceptTypes.length == 0) {
+            return DEFAULT_ACCEPT_TYPES;
+        }
+
+        int validCount = 0;
+        for (String type : acceptTypes) {
+            if (type != null && !type.trim().isEmpty() && !"*/*".equals(type.trim())) {
+                validCount++;
+            }
+        }
+
+        if (validCount == 0) {
+            return DEFAULT_ACCEPT_TYPES;
+        }
+
+        String[] cleanedTypes = new String[validCount];
+        int index = 0;
+        for (String type : acceptTypes) {
+            if (type != null && !type.trim().isEmpty() && !"*/*".equals(type.trim())) {
+                cleanedTypes[index] = type.trim();
+                index++;
+            }
+        }
+
+        return cleanedTypes;
+    }
+
     private void requestRuntimePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(new String[] {
@@ -154,10 +198,14 @@ public class MainActivity extends Activity {
                 int count = data.getClipData().getItemCount();
                 results = new Uri[count];
                 for (int i = 0; i < count; i++) {
-                    results[i] = data.getClipData().getItemAt(i).getUri();
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    results[i] = uri;
                 }
             } else if (data.getData() != null) {
-                results = new Uri[] { data.getData() };
+                Uri uri = data.getData();
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                results = new Uri[] { uri };
             }
         }
 
