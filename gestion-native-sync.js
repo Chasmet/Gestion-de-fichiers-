@@ -24,6 +24,26 @@
     }
   }
 
+  async function syncExistingIndexedDbFiles() {
+    if (window.__gestionExistingNativeSyncDone) return;
+    if (!window.GestionNativeStore || typeof window.getAllItems !== "function") return;
+
+    window.__gestionExistingNativeSyncDone = true;
+
+    try {
+      const items = await window.getAllItems();
+      const files = (items || [])
+        .filter(item => item && item.type === "file" && item.blob)
+        .map(item => new File([item.blob], item.name || "fichier", {
+          type: item.mimeType || item.blob.type || "application/octet-stream"
+        }));
+
+      await syncFilesToNative(files);
+    } catch (error) {
+      // Synchronisation silencieuse : l'app principale doit rester utilisable.
+    }
+  }
+
   function installImportHook() {
     if (typeof window.importFiles !== "function" || window.__gestionNativeSyncInstalled) return;
     window.__gestionNativeSyncInstalled = true;
@@ -37,6 +57,12 @@
     };
   }
 
-  document.addEventListener("DOMContentLoaded", () => setTimeout(installImportHook, 400));
-  setTimeout(installImportHook, 1200);
+  function boot() {
+    installImportHook();
+    setTimeout(syncExistingIndexedDbFiles, 1200);
+    setTimeout(syncExistingIndexedDbFiles, 2800);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => setTimeout(boot, 400));
+  setTimeout(boot, 1200);
 })();
