@@ -144,6 +144,11 @@ public class MainActivity extends Activity {
         public String saveFileBase64(String name, String mimeType, String base64) {
             return GestionNativeStore.saveBase64(MainActivity.this, name, base64);
         }
+
+        @JavascriptInterface
+        public String saveFileBase64InFolder(String folderPath, String name, String mimeType, String base64) {
+            return GestionNativeStore.saveBase64InFolder(MainActivity.this, folderPath, name, base64);
+        }
     }
 
     private String[] cleanAcceptTypes(String[] acceptTypes) {
