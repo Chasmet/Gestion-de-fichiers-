@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.DocumentsContract;
+import android.view.HapticFeedbackConstants;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
@@ -103,6 +104,7 @@ public class MainActivity extends Activity {
                 Intent chooser = Intent.createChooser(intent, "Choisir une image, une vidéo, un audio ou un document");
 
                 try {
+                    nativeFeedback("soft");
                     startActivityForResult(chooser, FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception error) {
@@ -135,9 +137,11 @@ public class MainActivity extends Activity {
                     if (manager != null) {
                         manager.enqueue(request);
                         Toast.makeText(MainActivity.this, "Téléchargement lancé", Toast.LENGTH_SHORT).show();
+                        nativeFeedback("success");
                     }
                 } catch (Exception error) {
                     Toast.makeText(MainActivity.this, "Téléchargement impossible", Toast.LENGTH_SHORT).show();
+                    nativeFeedback("error");
                 }
             }
         });
@@ -159,6 +163,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void nativeFeedback(String kind) {
+        if (webView == null) return;
+
+        int feedback = HapticFeedbackConstants.KEYBOARD_TAP;
+        if ("success".equals(kind)) feedback = HapticFeedbackConstants.CONFIRM;
+        if ("error".equals(kind) || "danger".equals(kind)) feedback = HapticFeedbackConstants.REJECT;
+        if ("long".equals(kind)) feedback = HapticFeedbackConstants.LONG_PRESS;
+
+        try {
+            webView.performHapticFeedback(feedback);
+        } catch (Exception ignored) {}
+    }
+
     public class NativeStoreBridge {
         @JavascriptInterface
         public String saveFileBase64(String name, String mimeType, String base64) {
@@ -174,6 +191,16 @@ public class MainActivity extends Activity {
         public void openAndroidFolderImporter() {
             runOnUiThread(() -> MainActivity.this.openAndroidFolderImporter());
         }
+
+        @JavascriptInterface
+        public void haptic(String kind) {
+            runOnUiThread(() -> nativeFeedback(kind));
+        }
+
+        @JavascriptInterface
+        public void toast(String message) {
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show());
+        }
     }
 
     private void openAndroidFolderImporter() {
@@ -183,9 +210,11 @@ public class MainActivity extends Activity {
         intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
 
         try {
+            nativeFeedback("soft");
             startActivityForResult(intent, FOLDER_IMPORT_REQUEST_CODE);
         } catch (Exception error) {
             Toast.makeText(this, "Gestionnaire de fichiers indisponible", Toast.LENGTH_SHORT).show();
+            nativeFeedback("error");
         }
     }
 
@@ -322,15 +351,20 @@ public class MainActivity extends Activity {
 
         if (requestCode == FOLDER_IMPORT_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                nativeFeedback("soft");
+                Toast.makeText(this, "Import du dossier en cours…", Toast.LENGTH_SHORT).show();
                 int count = importFolderTree(data.getData(), data);
                 Toast.makeText(
                     this,
                     count > 0 ? count + " fichier(s) importé(s) dans Gestionnaire" : "Aucun fichier importé",
                     Toast.LENGTH_LONG
                 ).show();
+                nativeFeedback(count > 0 ? "success" : "error");
                 if (webView != null) {
-                    webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gestion-native-folder-imported'))", null);
+                    webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gestion-native-folder-imported', { detail: { count: " + count + " } }))", null);
                 }
+            } else {
+                nativeFeedback("error");
             }
             return;
         }
@@ -352,13 +386,17 @@ public class MainActivity extends Activity {
                     } catch (Exception ignored) {}
                     results[i] = uri;
                 }
+                nativeFeedback(count > 0 ? "success" : "error");
             } else if (data.getData() != null) {
                 Uri uri = data.getData();
                 try {
                     getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 } catch (Exception ignored) {}
                 results = new Uri[] { uri };
+                nativeFeedback("success");
             }
+        } else {
+            nativeFeedback("error");
         }
 
         filePathCallback.onReceiveValue(results);
@@ -368,6 +406,7 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (webView != null && webView.canGoBack()) {
+            nativeFeedback("soft");
             webView.goBack();
         } else {
             super.onBackPressed();
