@@ -34,11 +34,13 @@ jobs:
           cp index.html web-dist/
           cp style.css web-dist/ 2>/dev/null || true
           cp smart-folder-v2.css web-dist/ 2>/dev/null || true
+          cp gestion-apk-polish.css web-dist/ 2>/dev/null || true
           cp script.js web-dist/ 2>/dev/null || true
           cp smart-folder-v2.js web-dist/ 2>/dev/null || true
           cp gestion-native-sync.js web-dist/ 2>/dev/null || true
           cp android-montage-link.js web-dist/ 2>/dev/null || true
           cp gestion-folder-import-button.js web-dist/ 2>/dev/null || true
+          cp gestion-apk-polish.js web-dist/ 2>/dev/null || true
           cp manifest.json web-dist/ 2>/dev/null || true
           cp logo.png web-dist/ 2>/dev/null || true
           touch web-dist/.nojekyll
