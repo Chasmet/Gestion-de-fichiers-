@@ -6,6 +6,7 @@ import android.webkit.MimeTypeMap;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.Locale;
 
 public class GestionNativeStore {
@@ -48,14 +49,43 @@ public class GestionNativeStore {
 
     public static String saveBase64InFolder(Context context, String folderPath, String name, String base64) {
         try {
+            byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+            return saveBytesInFolder(context, folderPath, name, bytes);
+        } catch (Exception error) {
+            return "";
+        }
+    }
+
+    public static String saveBytesInFolder(Context context, String folderPath, String name, byte[] bytes) {
+        try {
             File root = rootDir(context);
             File dir = new File(root, safeFolderPath(folderPath));
             if (!dir.exists()) dir.mkdirs();
 
             File file = new File(dir, safeName(name));
-            byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
             try (FileOutputStream output = new FileOutputStream(file, false)) {
                 output.write(bytes);
+            }
+
+            return relativePath(root, file);
+        } catch (Exception error) {
+            return "";
+        }
+    }
+
+    public static String saveInputStreamInFolder(Context context, String folderPath, String name, InputStream input) {
+        try {
+            File root = rootDir(context);
+            File dir = new File(root, safeFolderPath(folderPath));
+            if (!dir.exists()) dir.mkdirs();
+
+            File file = new File(dir, safeName(name));
+            try (FileOutputStream output = new FileOutputStream(file, false)) {
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                }
             }
 
             return relativePath(root, file);
