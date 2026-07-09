@@ -6,10 +6,12 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.DocumentsContract;
 import android.webkit.ConsoleMessage;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
@@ -22,8 +24,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import java.io.InputStream;
+
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 2001;
+    private static final int FOLDER_IMPORT_REQUEST_CODE = 3001;
+    private static final String ACTION_IMPORT_FOLDER = "com.chasmet.gestiondefichiers.IMPORT_FOLDER";
     private static final String[] DEFAULT_ACCEPT_TYPES = new String[] {
         "image/*",
         "video/*",
@@ -137,6 +143,20 @@ public class MainActivity extends Activity {
         });
 
         webView.loadUrl("file:///android_asset/www/index.html");
+        handleImportIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleImportIntent(intent);
+    }
+
+    private void handleImportIntent(Intent intent) {
+        if (intent != null && ACTION_IMPORT_FOLDER.equals(intent.getAction())) {
+            webView.postDelayed(() -> openAndroidFolderImporter(), 350);
+        }
     }
 
     public class NativeStoreBridge {
@@ -149,6 +169,105 @@ public class MainActivity extends Activity {
         public String saveFileBase64InFolder(String folderPath, String name, String mimeType, String base64) {
             return GestionNativeStore.saveBase64InFolder(MainActivity.this, folderPath, name, base64);
         }
+
+        @JavascriptInterface
+        public void openAndroidFolderImporter() {
+            runOnUiThread(() -> MainActivity.this.openAndroidFolderImporter());
+        }
+    }
+
+    private void openAndroidFolderImporter() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+
+        try {
+            startActivityForResult(intent, FOLDER_IMPORT_REQUEST_CODE);
+        } catch (Exception error) {
+            Toast.makeText(this, "Gestionnaire de fichiers indisponible", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private int importFolderTree(Uri treeUri, Intent data) {
+        if (treeUri == null) return 0;
+
+        try {
+            int flags = data != null ? data.getFlags() : 0;
+            int takeFlags = flags & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            if (takeFlags != 0) {
+                getContentResolver().takePersistableUriPermission(treeUri, takeFlags);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            String treeDocumentId = DocumentsContract.getTreeDocumentId(treeUri);
+            Uri rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocumentId);
+            String rootName = getDocumentDisplayName(rootDocumentUri, "Dossier importé");
+            return copyDocumentTree(treeUri, treeDocumentId, rootName);
+        } catch (Exception error) {
+            return 0;
+        }
+    }
+
+    private int copyDocumentTree(Uri treeUri, String documentId, String folderPath) {
+        int copied = 0;
+        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
+        String[] projection = new String[] {
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        };
+
+        try (Cursor cursor = getContentResolver().query(childrenUri, projection, null, null, null)) {
+            if (cursor == null) return 0;
+
+            int idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+            int nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            int mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE);
+
+            while (cursor.moveToNext()) {
+                String childId = idIndex >= 0 ? cursor.getString(idIndex) : "";
+                String name = nameIndex >= 0 ? cursor.getString(nameIndex) : "fichier";
+                String mime = mimeIndex >= 0 ? cursor.getString(mimeIndex) : "application/octet-stream";
+
+                if (childId == null || childId.isEmpty()) continue;
+
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    copied += copyDocumentTree(treeUri, childId, folderPath + "/" + name);
+                    continue;
+                }
+
+                Uri fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId);
+                try (InputStream input = getContentResolver().openInputStream(fileUri)) {
+                    if (input == null) continue;
+                    String saved = GestionNativeStore.saveInputStreamInFolder(this, folderPath, name, input);
+                    if (saved != null && !saved.isEmpty()) copied++;
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+
+        return copied;
+    }
+
+    private String getDocumentDisplayName(Uri documentUri, String fallback) {
+        try (Cursor cursor = getContentResolver().query(
+            documentUri,
+            new String[] { DocumentsContract.Document.COLUMN_DISPLAY_NAME },
+            null,
+            null,
+            null
+        )) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int index = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+                if (index >= 0) {
+                    String value = cursor.getString(index);
+                    if (value != null && !value.trim().isEmpty()) return value.trim();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return fallback;
     }
 
     private String[] cleanAcceptTypes(String[] acceptTypes) {
@@ -201,6 +320,21 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        if (requestCode == FOLDER_IMPORT_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+                int count = importFolderTree(data.getData(), data);
+                Toast.makeText(
+                    this,
+                    count > 0 ? count + " fichier(s) importé(s) dans Gestionnaire" : "Aucun fichier importé",
+                    Toast.LENGTH_LONG
+                ).show();
+                if (webView != null) {
+                    webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gestion-native-folder-imported'))", null);
+                }
+            }
+            return;
+        }
+
         if (requestCode != FILE_CHOOSER_REQUEST_CODE || filePathCallback == null) {
             return;
         }
@@ -213,12 +347,16 @@ public class MainActivity extends Activity {
                 results = new Uri[count];
                 for (int i = 0; i < count; i++) {
                     Uri uri = data.getClipData().getItemAt(i).getUri();
-                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (Exception ignored) {}
                     results[i] = uri;
                 }
             } else if (data.getData() != null) {
                 Uri uri = data.getData();
-                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {}
                 results = new Uri[] { uri };
             }
         }
