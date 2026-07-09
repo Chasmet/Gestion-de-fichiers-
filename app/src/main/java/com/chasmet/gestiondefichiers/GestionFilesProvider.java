@@ -35,39 +35,84 @@ public class GestionFilesProvider extends ContentProvider {
         return dir;
     }
 
+    private File safeFileFromRelative(String relativePath) {
+        if (relativePath == null || relativePath.trim().isEmpty()) return null;
+        try {
+            File root = rootDir();
+            File file = new File(root, relativePath).getCanonicalFile();
+            String rootPath = root.getCanonicalPath();
+            if (!file.getPath().startsWith(rootPath)) return null;
+            return file;
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
     private File fileFromUri(Uri uri) {
-        String name = uri.getLastPathSegment();
-        if (name == null) return null;
-        return new File(rootDir(), name);
+        String relativePath = uri.getLastPathSegment();
+        return safeFileFromRelative(relativePath);
+    }
+
+    private MatrixCursor makeCursor() {
+        return new MatrixCursor(new String[] {
+            OpenableColumns.DISPLAY_NAME,
+            OpenableColumns.SIZE,
+            "uri",
+            "mime",
+            "folderPath",
+            "relativePath"
+        });
+    }
+
+    private void addFileRows(MatrixCursor cursor, File root, File dir) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                addFileRows(cursor, root, file);
+                continue;
+            }
+
+            if (!file.isFile()) continue;
+
+            String relativePath = GestionNativeStore.relativePath(root, file);
+            String folderPath = GestionNativeStore.folderPathFromRelative(relativePath);
+            String mime = GestionNativeStore.guessMime(file.getName());
+            Uri contentUri = Uri.parse("content://" + AUTHORITY + "/files/" + Uri.encode(relativePath));
+            cursor.addRow(new Object[] {
+                file.getName(),
+                file.length(),
+                contentUri.toString(),
+                mime,
+                folderPath,
+                relativePath
+            });
+        }
     }
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
-        MatrixCursor cursor = new MatrixCursor(new String[] {
-            OpenableColumns.DISPLAY_NAME,
-            OpenableColumns.SIZE,
-            "uri",
-            "mime"
-        });
+        MatrixCursor cursor = makeCursor();
 
         if (matcher.match(uri) == FILES) {
-            File[] files = rootDir().listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    if (file.isFile()) {
-                        String mime = GestionNativeStore.guessMime(file.getName());
-                        Uri contentUri = Uri.parse("content://" + AUTHORITY + "/files/" + Uri.encode(file.getName()));
-                        cursor.addRow(new Object[] { file.getName(), file.length(), contentUri.toString(), mime });
-                    }
-                }
-            }
+            File root = rootDir();
+            addFileRows(cursor, root, root);
             return cursor;
         }
 
         if (matcher.match(uri) == FILE) {
             File file = fileFromUri(uri);
-            if (file != null && file.exists()) {
-                cursor.addRow(new Object[] { file.getName(), file.length(), uri.toString(), GestionNativeStore.guessMime(file.getName()) });
+            if (file != null && file.exists() && file.isFile()) {
+                String relativePath = GestionNativeStore.relativePath(rootDir(), file);
+                cursor.addRow(new Object[] {
+                    file.getName(),
+                    file.length(),
+                    uri.toString(),
+                    GestionNativeStore.guessMime(file.getName()),
+                    GestionNativeStore.folderPathFromRelative(relativePath),
+                    relativePath
+                });
             }
             return cursor;
         }
@@ -84,7 +129,7 @@ public class GestionFilesProvider extends ContentProvider {
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         File file = fileFromUri(uri);
-        if (file == null || !file.exists()) throw new FileNotFoundException("Fichier introuvable");
+        if (file == null || !file.exists() || !file.isFile()) throw new FileNotFoundException("Fichier introuvable");
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
