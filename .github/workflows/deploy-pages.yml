@@ -1,0 +1,56 @@
+name: Deploy Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: deploy-web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare clean web package
+        run: |
+          rm -rf web-dist
+          mkdir -p web-dist
+          cp index.html web-dist/
+          cp style.css web-dist/ 2>/dev/null || true
+          cp smart-folder-v2.css web-dist/ 2>/dev/null || true
+          cp script.js web-dist/ 2>/dev/null || true
+          cp smart-folder-v2.js web-dist/ 2>/dev/null || true
+          cp gestion-native-sync.js web-dist/ 2>/dev/null || true
+          cp android-montage-link.js web-dist/ 2>/dev/null || true
+          cp gestion-folder-import-button.js web-dist/ 2>/dev/null || true
+          cp manifest.json web-dist/ 2>/dev/null || true
+          cp logo.png web-dist/ 2>/dev/null || true
+          touch web-dist/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web-dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
